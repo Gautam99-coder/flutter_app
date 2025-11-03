@@ -1,8 +1,11 @@
+import 'package:abc_app/forgetpassword.dart';
 import 'package:abc_app/screens/patient/patient_homepage.dart';
 import 'package:abc_app/screens/pharmacy/pharmacy_homepage.dart';
 import 'package:abc_app/services/google_signin_helper.dart';
 import 'package:abc_app/signup.dart';
 import 'package:abc_app/uihelper.dart';
+import 'package:abc_app/widgets/bottom_navbar.dart';
+import 'package:abc_app/widgets/pharmacy_bottom_navbar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // Import Firestore
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
@@ -38,10 +41,9 @@ class _LoginpageState extends State<Loginpage> {
 
         // 3. Navigate based on role
         if (role == 'pharmacy') {
-          // ignore: use_build_context_synchronously
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (context) => const PharmacyHomePage()),
+            MaterialPageRoute(builder: (context) => const PharmacyBottomNavbar()),
           );
         } else {
           // Default to patient home page
@@ -64,10 +66,15 @@ class _LoginpageState extends State<Loginpage> {
           'uid': user.uid,
         });
         // ignore: use_build_context_synchronously
+        // CORRECT
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const PatientHomePage()),
+          MaterialPageRoute(builder: (context) => const BottomNavbar()),
         );
+        // Navigator.pushReplacement(
+        //   context,
+        //   MaterialPageRoute(builder: (context) => const PatientHomePage()),
+        // );
       }
     } catch (e) {
       Uihelper.CustomAlertBox(context, "Failed to fetch user data: $e");
@@ -223,7 +230,7 @@ class _LoginpageState extends State<Loginpage> {
                         ),
                         TextButton(
                           onPressed: () {
-                            Navigator.pushNamed(context, '/forgetpassword');
+                            Navigator.push(context, MaterialPageRoute(builder: (context)=>Forgetpassword()));
                           },
                           child: const Text(
                             "reset password", // Changed text as per image 1
