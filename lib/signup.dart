@@ -60,6 +60,9 @@ class _SignupState extends State<Signup> {
           'email': email,
           'role': 'patient', // <-- This is the important part
           'uid': uid,
+          'profileImageUrl': '', // <-- ADD THIS
+          'bio': '',             // <-- ADD THIS
+          'location': '',
         });
 
         // 3. Navigate to Patient Home Page
@@ -96,6 +99,9 @@ class _SignupState extends State<Signup> {
             'email': user.email,
             'role': 'patient', // Default role for Google Sign-in
             'uid': user.uid,
+            'profileImageUrl': '', // <-- ADD THIS
+            'bio': '',             // <-- ADD THIS
+            'location': '',
           });
         }
 
