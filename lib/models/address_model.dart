@@ -23,11 +23,26 @@ class AddressModel {
     this.isDefault = false,
   });
 
-  // From Firestore document
-  factory AddressModel.fromMap(DocumentSnapshot doc) {
+  // From Firestore DocumentSnapshot (for addresses collection)
+  factory AddressModel.fromSnapshot(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
     return AddressModel(
       id: doc.id,
+      title: data['title'] ?? '',
+      addressLine1: data['addressLine1'] ?? '',
+      addressLine2: data['addressLine2'] ?? '',
+      city: data['city'] ?? '',
+      stateRegion: data['stateRegion'] ?? '',
+      postalCode: data['postalCode'] ?? '',
+      country: data['country'] ?? '',
+      isDefault: data['isDefault'] ?? false,
+    );
+  }
+
+  // From Map<String, dynamic> (for embedded objects like in orders)
+  factory AddressModel.fromMap(Map<String, dynamic> data) {
+    return AddressModel(
+      id: data['id'] ?? '',
       title: data['title'] ?? '',
       addressLine1: data['addressLine1'] ?? '',
       addressLine2: data['addressLine2'] ?? '',
