@@ -1,22 +1,21 @@
 import 'dart:io';
+import 'package:abc_app/models/address_model.dart';
+import 'package:abc_app/models/cart_model.dart';
 import 'package:abc_app/models/medicine_model.dart';
+import 'package:abc_app/models/notification_model.dart';
+import 'package:abc_app/models/order_model.dart';
 import 'package:abc_app/models/user_model.dart';
-import 'package:abc_app/models/cart_model.dart'; // <-- 1. IMPORT THE NEW CART MODEL
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloudinary_public/cloudinary_public.dart';
-
-import '../models/address_model.dart';
-import '../models/notification_model.dart';
-import '../models/order_model.dart';
 
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   final CloudinaryPublic _cloudinary = CloudinaryPublic(
-      'dfqqs04rn', // <-- Your Cloud Name
-      'ml_default', // <-- Your Upload Preset
+      'dfqqs04rn', // Your Cloud Name
+      'ml_default', // Your Upload Preset
       cache: false
   );
 
@@ -74,19 +73,6 @@ class FirestoreService {
     await _db.collection('users').doc(user.uid).update(user.toMap());
   }
 
-  // --- Medicine Detail Page Functions ---
-  Future<MedicineModel?> getMedicineById(String medicineId) async {
-    try {
-      DocumentSnapshot doc = await _db.collection('medicines').doc(medicineId).get();
-      if (doc.exists && doc.data() != null) {
-        return MedicineModel.fromMap(doc.data() as Map<String, dynamic>, doc.id);
-      }
-    } catch (e) {
-      print("Error getting medicine by ID: $e");
-    }
-    return null;
-  }
-
   Future<UserModel?> getPharmacyById(String pharmacyId) async {
     try {
       DocumentSnapshot doc = await _db.collection('users').doc(pharmacyId).get();
@@ -95,6 +81,31 @@ class FirestoreService {
       }
     } catch (e) {
       print("Error getting pharmacy by ID: $e");
+    }
+    return null;
+  }
+
+  Stream<List<UserModel>> getOtherPharmacies(String currentPharmacyId) {
+    return _db
+        .collection('users')
+        .where('role', isEqualTo: 'pharmacy')
+        .limit(5)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+        .map((doc) => UserModel.fromMap(doc.data() as Map<String, dynamic>))
+        .where((user) => user.uid != currentPharmacyId)
+        .toList());
+  }
+
+  // --- Medicine Functions ---
+  Future<MedicineModel?> getMedicineById(String medicineId) async {
+    try {
+      DocumentSnapshot doc = await _db.collection('medicines').doc(medicineId).get();
+      if (doc.exists && doc.data() != null) {
+        return MedicineModel.fromMap(doc.data() as Map<String, dynamic>, doc.id);
+      }
+    } catch (e) {
+      print("Error getting medicine by ID: $e");
     }
     return null;
   }
@@ -111,21 +122,17 @@ class FirestoreService {
         .toList());
   }
 
-  Stream<List<UserModel>> getOtherPharmacies(String currentPharmacyId) {
+  Stream<List<MedicineModel>> getMoreMedicines(String currentMedicineId) {
     return _db
-        .collection('users')
-        .where('role', isEqualTo: 'pharmacy')
+        .collection('medicines')
         .limit(5)
         .snapshots()
         .map((snapshot) => snapshot.docs
-        .map((doc) => UserModel.fromMap(doc.data() as Map<String, dynamic>))
-        .where((user) => user.uid != currentPharmacyId)
+        .map((doc) => MedicineModel.fromMap(doc.data(), doc.id))
+        .where((medicine) => medicine.id != currentMedicineId)
         .toList());
   }
 
-  //
-  // vvvv 2. ALL YOUR CART FUNCTIONS ARE NOW INSIDE THE CLASS vvvv
-  //
   // --- Cart Functions ---
   Future<void> addToCart(MedicineModel medicine) async {
     final String? uid = currentUserId;
@@ -146,7 +153,7 @@ class FirestoreService {
         'imageUrl': medicine.imageUrl,
         'price': medicine.price,
         'quantity': 1,
-        'pharmacyId': medicine.pharmacyId,   // <-- ADDED THIS
+        'pharmacyId': medicine.pharmacyId,
         'pharmacyName': pName,
       };
       await cart.add(newItem);
@@ -202,35 +209,84 @@ class FirestoreService {
     }
     await batch.commit();
   }
-  //
-  // ^^^^ ALL YOUR CART FUNCTIONS ARE NOW INSIDE THE CLASS ^^^^
-  //
 
-// Add these functions INSIDE your existing FirestoreService class
+  // --- Address Functions ---
+  Stream<List<AddressModel>> getAddresses() {
+    final String? uid = currentUserId;
+    if (uid == null) return Stream.value([]);
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('addresses')
+        .snapshots()
+        .map((snapshot) =>
+        snapshot.docs.map((doc) => AddressModel.fromMap(doc)).toList());
+  }
 
-  // --- Order Functions ---
-
-  // Creates a new order in Firestore and clears the cart
-  Future<void> placeOrder(OrderModel order) async {
+  Future<void> addAddress(AddressModel address) async {
     final String? uid = currentUserId;
     if (uid == null) throw Exception('User not logged in');
+    await _db
+        .collection('users')
+        .doc(uid)
+        .collection('addresses')
+        .add(address.toMap());
+  }
 
-    // 1. Add the order to the main 'orders' collection
+  Future<void> deleteAddress(String addressId) async {
+    final String? uid = currentUserId;
+    if (uid == null) return;
+    await _db
+        .collection('users')
+        .doc(uid)
+        .collection('addresses')
+        .doc(addressId)
+        .delete();
+  }
+
+  Future<void> setDefaultAddress(String addressId) async {
+    final String? uid = currentUserId;
+    if (uid == null) return;
+    final CollectionReference addressesRef =
+    _db.collection('users').doc(uid).collection('addresses');
+    WriteBatch batch = _db.batch();
+    QuerySnapshot allAddresses = await addressesRef.get();
+    for (var doc in allAddresses.docs) {
+      batch.update(doc.reference, {'isDefault': false});
+    }
+    DocumentReference newDefaultRef = addressesRef.doc(addressId);
+    batch.update(newDefaultRef, {'isDefault': true});
+    await batch.commit();
+  }
+
+  // --- Order Functions ---
+  Future<void> placeOrder(OrderModel order) async {
+    if (order.userId.isEmpty) throw Exception('User not logged in');
+
+    // 1. Create the order
     DocumentReference orderRef = await _db.collection('orders').add(order.toMap());
 
-    // 2. Create a notification for the PHARMACY
+    // 2. Create notification for the PHARMACY
     await createNotification(
-      userId: order.pharmacyId, // Send to pharmacy
+      userId: order.pharmacyId,
       title: 'New Order Received!',
       body: 'You have a new order (#${orderRef.id.substring(0, 6)}) from ${order.shippingAddress.title}.',
       orderId: orderRef.id,
     );
 
-    // 3. Clear the user's cart
+    // 3. (Optional) Create an "earning" document for the pharmacy
+    await _db.collection('earnings').add({
+      'pharmacyId': order.pharmacyId,
+      'orderId': orderRef.id,
+      'amount': order.total,
+      'createdAt': order.createdAt,
+      'status': 'Pending', // Earning is pending until order is delivered
+    });
+
+    // 4. Clear the user's cart
     await clearCart();
   }
 
-  // Gets a stream of all orders for the current PATIENT
   Stream<List<OrderModel>> getPatientOrders() {
     final String? uid = currentUserId;
     if (uid == null) return Stream.value([]);
@@ -243,12 +299,9 @@ class FirestoreService {
         .map((snapshot) =>
         snapshot.docs.map((doc) => OrderModel.fromMap(doc)).toList());
   }
-
-  // Gets a stream of all orders for the current PHARMACY
   Stream<List<OrderModel>> getPharmacyOrders() {
     final String? uid = currentUserId;
     if (uid == null) return Stream.value([]);
-
     return _db
         .collection('orders')
         .where('pharmacyId', isEqualTo: uid)
@@ -258,14 +311,34 @@ class FirestoreService {
         snapshot.docs.map((doc) => OrderModel.fromMap(doc)).toList());
   }
 
-  // Update order status and optionally send a notification
+  // This function is for the Earning Page
+  Stream<QuerySnapshot> getPharmacyEarnings() {
+    final String? uid = currentUserId;
+    if (uid == null) {
+      return const Stream.empty();
+    }
+    return _db
+        .collection('earnings')
+        .where('pharmacyId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .snapshots();
+  }
+
+
   Future<void> updateOrderStatus(String orderId, String status, String userId, {String? cancellationReason}) async {
     Map<String, dynamic> dataToUpdate = {'status': status};
     if (cancellationReason != null) {
       dataToUpdate['cancellationReason'] = cancellationReason;
     }
-
     await _db.collection('orders').doc(orderId).update(dataToUpdate);
+
+    // If delivered, update the earning status
+    if (status == 'Delivered') {
+      QuerySnapshot earningSnap = await _db.collection('earnings').where('orderId', isEqualTo: orderId).limit(1).get();
+      if (earningSnap.docs.isNotEmpty) {
+        await earningSnap.docs.first.reference.update({'status': 'Completed'});
+      }
+    }
 
     // Send notification to the PATIENT
     await createNotification(
@@ -296,7 +369,6 @@ class FirestoreService {
   Stream<List<NotificationModel>> getNotifications() {
     final String? uid = currentUserId;
     if (uid == null) return Stream.value([]);
-
     return _db
         .collection('users')
         .doc(uid)
@@ -309,17 +381,12 @@ class FirestoreService {
 
   // --- Rating Function ---
   Future<void> submitRating(MedicineModel medicine, double rating, String review) async {
-    // 1. Calculate new average rating
     final double newRating = ((medicine.rating * medicine.reviewCount) + rating) / (medicine.reviewCount + 1);
     final int newReviewCount = medicine.reviewCount + 1;
-
-    // 2. Update the medicine document
     await _db.collection('medicines').doc(medicine.id).update({
       'rating': newRating,
       'reviewCount': newReviewCount,
     });
-
-    // 3. (Optional) Save the review text to a subcollection
     await _db.collection('medicines').doc(medicine.id).collection('reviews').add({
       'userId': currentUserId,
       'rating': rating,
@@ -327,70 +394,9 @@ class FirestoreService {
       'createdAt': Timestamp.now(),
     });
   }
-// Gets a live stream of the user's addresses
-  Stream<List<AddressModel>> getAddresses() {
-    final String? uid = currentUserId;
-    if (uid == null) return Stream.value([]);
 
-    return _db
-        .collection('users')
-        .doc(uid)
-        .collection('addresses')
-        .snapshots()
-        .map((snapshot) =>
-        snapshot.docs.map((doc) => AddressModel.fromMap(doc)).toList());
-  }
-
-  // Adds a new address
-  Future<void> addAddress(AddressModel address) async {
-    final String? uid = currentUserId;
-    if (uid == null) throw Exception('User not logged in');
-
-    await _db
-        .collection('users')
-        .doc(uid)
-        .collection('addresses')
-        .add(address.toMap());
-  }
-
-  // Deletes an address
-  Future<void> deleteAddress(String addressId) async {
-    final String? uid = currentUserId;
-    if (uid == null) return;
-
-    await _db
-        .collection('users')
-        .doc(uid)
-        .collection('addresses')
-        .doc(addressId)
-        .delete();
-  }
-
-  // Sets a new default address and unsets all others
-  Future<void> setDefaultAddress(String addressId) async {
-    final String? uid = currentUserId;
-    if (uid == null) return;
-
-    final CollectionReference addressesRef =
-    _db.collection('users').doc(uid).collection('addresses');
-
-    // Use a batch write to ensure this is an atomic operation
-    WriteBatch batch = _db.batch();
-
-    // 1. Get all addresses to unset them
-    QuerySnapshot allAddresses = await addressesRef.get();
-    for (var doc in allAddresses.docs) {
-      batch.update(doc.reference, {'isDefault': false});
-    }
-
-    // 2. Set the new default address
-    DocumentReference newDefaultRef = addressesRef.doc(addressId);
-    batch.update(newDefaultRef, {'isDefault': true});
-
-    // 3. Commit the batch
-    await batch.commit();
-  }
   // --- Pharmacy (Inventory) Functions ---
+  // (These are duplicated in your file, I am only keeping one set)
   Stream<List<MedicineModel>> getPharmacyMedicines() {
     final String? uid = currentUserId;
     if (uid == null) return Stream.value([]);
