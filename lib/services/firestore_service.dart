@@ -1,15 +1,3 @@
-import 'dart:io';
-import 'package:abc_app/models/address_model.dart';
-import 'package:abc_app/models/cart_item_model.dart';
-import 'package:abc_app/models/medicine_model.dart';
-import 'package:abc_app/models/notification_model.dart';
-import 'package:abc_app/models/order_model.dart';
-import 'package:abc_app/models/user_model.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloudinary_public/cloudinary_public.dart';
-
-class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
@@ -132,7 +120,53 @@ class FirestoreService {
         .where((medicine) => medicine.id != currentMedicineId)
         .toList());
   }
+// Add to FirestoreService class
 
+// Payment Functions
+  Future<void> createPayment(PaymentModel payment) async {
+    await _db.collection('payments').add(payment.toMap());
+  }
+
+  Future<void> updatePaymentStatus(String paymentId, String status, {
+    String? razorpayPaymentId,
+    String? razorpaySignature,
+    String? failureReason,
+  }) async {
+    Map<String, dynamic> updateData = {
+      'status': status,
+      'updatedAt': Timestamp.now(),
+    };
+
+    if (razorpayPaymentId != null) {
+      updateData['razorpayPaymentId'] = razorpayPaymentId;
+    }
+    if (razorpaySignature != null) {
+      updateData['razorpaySignature'] = razorpaySignature;
+    }
+    if (failureReason != null) {
+      updateData['failureReason'] = failureReason;
+    }
+
+    await _db.collection('payments').doc(paymentId).update(updateData);
+  }
+
+  Future<PaymentModel?> getPaymentByOrderId(String orderId) async {
+    try {
+      QuerySnapshot snapshot = await _db
+          .collection('payments')
+          .where('orderId', isEqualTo: orderId)
+          .limit(1)
+          .get();
+
+      if (snapshot.docs.isNotEmpty) {
+        return PaymentModel.fromSnapshot(snapshot.docs.first);
+      }
+      return null;
+    } catch (e) {
+      print('Error getting payment: $e');
+      return null;
+    }
+  }
   // --- Cart Functions ---
   Future<void> addToCart(MedicineModel medicine) async {
     final String? uid = currentUserId;
@@ -263,30 +297,47 @@ class FirestoreService {
 
   // --- Order Functions ---
   Future<void> placeOrder(OrderModel order) async {
-    if (order.userId.isEmpty) throw Exception('User not logged in');
+    try {
+      if (order.userId.isEmpty) throw Exception('User not logged in');
 
-    // 1. Create the order
-    DocumentReference orderRef = await _db.collection('orders').add(order.toMap());
+      print('Creating order in Firestore...');
 
-    // 2. Create notification for the PHARMACY
-    await createNotification(
-      userId: order.pharmacyId,
-      title: 'New Order Received!',
-      body: 'You have a new order (#${orderRef.id.substring(0, 6)}) from ${order.shippingAddress.title}.',
-      orderId: orderRef.id,
-    );
+      // Validate the address has an ID
+      if (order.shippingAddress.id == null || order.shippingAddress.id!.isEmpty) {
+        throw Exception('Shipping address ID is empty');
+      }
 
-    // 3. (Optional) Create an "earning" document for the pharmacy
-    await _db.collection('earnings').add({
-      'pharmacyId': order.pharmacyId,
-      'orderId': orderRef.id,
-      'amount': order.total,
-      'createdAt': order.createdAt,
-      'status': 'Pending', // Earning is pending until order is delivered
-    });
+      // 1. Create the order
+      DocumentReference orderRef = await _db.collection('orders').add(order.toMap());
+      print('Order created with ID: ${orderRef.id}');
 
-    // 4. Clear the user's cart
-    await clearCart();
+      // 2. Create notification for the PHARMACY
+      await createNotification(
+        userId: order.pharmacyId,
+        title: 'New Order Received!',
+        body: 'You have a new order (#${orderRef.id.substring(0, 6)}) from ${order.shippingAddress.title}.',
+        orderId: orderRef.id,
+      );
+      print('Notification created for pharmacy');
+
+      // 3. Create an "earning" document for the pharmacy
+      await _db.collection('earnings').add({
+        'pharmacyId': order.pharmacyId,
+        'orderId': orderRef.id,
+        'amount': order.total,
+        'createdAt': order.createdAt,
+        'status': 'Pending',
+      });
+      print('Earnings document created');
+
+      // 4. Clear the user's cart
+      await clearCart();
+      print('Cart cleared successfully');
+
+    } catch (e) {
+      print('Error in placeOrder: $e');
+      rethrow;
+    }
   }
 
   Stream<List<OrderModel>> getPatientOrders() {
@@ -484,4 +535,3 @@ class FirestoreService {
       'inStock': newQuantity > 0,
     });
   }
-}
