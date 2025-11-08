@@ -1,6 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:abc_app/models/address_model.dart';
-
 import 'cart_item_model.dart';
 
 class OrderModel {
@@ -68,8 +67,12 @@ class OrderModel {
       items: (data['items'] as List<dynamic>? ?? [])
           .map((itemData) => CartItemModel.fromMap(itemData))
           .toList(),
-      // FIXED: Use AddressModel.fromMap for Map data
-      shippingAddress: AddressModel.fromMap(data['shippingAddress']),
+
+      // FIXED: Added a null check here to prevent crashes
+      shippingAddress: data['shippingAddress'] != null
+          ? AddressModel.fromMap(data['shippingAddress'])
+          : AddressModel.empty(), // Assumes you have an .empty() constructor
+
       subtotal: (data['subtotal'] as num?)?.toDouble() ?? 0.0,
       shipping: (data['shipping'] as num?)?.toDouble() ?? 0.0,
       total: (data['total'] as num?)?.toDouble() ?? 0.0,
