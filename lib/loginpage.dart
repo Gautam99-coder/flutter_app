@@ -1,13 +1,13 @@
-import 'package:abc_app/screens/patient/patient_homepage.dart';
-import 'package:abc_app/screens/pharmacy/pharmacy_homepage.dart';
+import 'package:abc_app/checkuser.dart'; // <-- IMPORT CHECKUSER
+import 'package:abc_app/forgetpassword.dart';
 import 'package:abc_app/services/google_signin_helper.dart';
 import 'package:abc_app/signup.dart';
 import 'package:abc_app/uihelper.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // Import Firestore
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-// Removed unused google_sign_in import
+
+// Removed unused imports like Firestore, PatientHomePage, etc.
 
 class Loginpage extends StatefulWidget {
   const Loginpage({super.key});
@@ -23,57 +23,19 @@ class _LoginpageState extends State<Loginpage> {
   bool _passwordVisible = false;
   bool _rememberMe = false;
 
-  // --- Helper function to check role and navigate ---
-  Future<void> _checkRoleAndNavigate(User user) async {
-    try {
-      // 1. Get the user's document from Firestore
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-
-      if (userDoc.exists) {
-        // 2. Check the 'role' field
-        String role = userDoc.data()?['role'];
-
-        // 3. Navigate based on role
-        if (role == 'pharmacy') {
-          // ignore: use_build_context_synchronously
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const PharmacyHomePage()),
-          );
-        } else {
-          // Default to patient home page
-          // ignore: use_build_context_synchronously
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const PatientHomePage()),
-          );
-        }
-      } else {
-        // This case handles Google users who signed up but data wasn't saved
-        // We'll create a 'patient' record for them
-        await FirebaseFirestore.instance
-            .collection("users")
-            .doc(user.uid)
-            .set({
-          'name': user.displayName ?? 'Google User',
-          'email': user.email,
-          'role': 'patient', // Default to patient
-          'uid': user.uid,
-        });
-        // ignore: use_build_context_synchronously
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const PatientHomePage()),
-        );
-      }
-    } catch (e) {
-      Uihelper.CustomAlertBox(context, "Failed to fetch user data: $e");
+  // --- THIS IS THE CORRECT NAVIGATION LOGIC ---
+  void _navigateAfterLogin() {
+    // This forces the app to re-run the logic in Checkuser > RoleBasedRedirector,
+    // which will correctly load the correct BottomNavbar for either role.
+    if (mounted) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const Checkuser()),
+            (route) => false, // This removes the login page from the stack
+      );
     }
   }
-  // --- End Helper Function ---
+  // --- END OF FIX ---
 
   // Updated login function
   Future<void> login(String email, String password) async {
@@ -90,9 +52,9 @@ class _LoginpageState extends State<Loginpage> {
         password: password,
       );
 
-      // 2. Check role and navigate
+      // 2. Navigate correctly
       if (userCredential.user != null) {
-        await _checkRoleAndNavigate(userCredential.user!);
+        _navigateAfterLogin(); // <-- USE THE CORRECT NAVIGATION
       }
     } on FirebaseAuthException catch (ex) {
       Uihelper.CustomAlertBox(context, ex.code.toString());
@@ -105,13 +67,14 @@ class _LoginpageState extends State<Loginpage> {
       User? user = await SimpleGoogleAuth.signInWithGoogle();
 
       if (user != null) {
-        // Check role and navigate
-        await _checkRoleAndNavigate(user);
+        // Navigate correctly
+        _navigateAfterLogin(); // <-- USE THE CORRECT NAVIGATION
       } else {
         Uihelper.CustomAlertBox(context, "Google Sign-In was cancelled");
       }
     } catch (e) {
-      Uihelper.CustomAlertBox(context, "Google Sign-In failed: ${e.toString()}");
+      Uihelper.CustomAlertBox(
+          context, "Google Sign-In failed: ${e.toString()}");
     }
   }
 
@@ -121,9 +84,6 @@ class _LoginpageState extends State<Loginpage> {
     passwordController.dispose();
     super.dispose();
   }
-
-  // ... (Your build method remains the same as the one I gave you before)
-  // ... (It already has the correct UI)
 
   @override
   Widget build(BuildContext context) {
@@ -141,14 +101,14 @@ class _LoginpageState extends State<Loginpage> {
           ),
 
           // 2. Back Button
-          Positioned(
-            top: 40.0, // Adjust for status bar
-            left: 10.0,
-            child: IconButton(
-              icon: const Icon(Icons.arrow_back, color: Colors.white, size: 30),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-          ),
+          // Positioned(
+          //   top: 40.0, // Adjust for status bar
+          //   left: 10.0,
+          //   child: IconButton(
+          //     icon: const Icon(Icons.arrow_back, color: Colors.white, size: 30),
+          //     onPressed: () => Navigator.of(context).pop(),
+          //   ),
+          // ),
 
           // 3. Main Content
           Center(
@@ -205,30 +165,43 @@ class _LoginpageState extends State<Loginpage> {
                     const SizedBox(height: 5),
 
                     // Remember Me and Forget Password Row
+                    // Responsive Remember Me + Reset Password
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          children: [
-                            Checkbox(
-                              value: _rememberMe,
-                              onChanged: (bool? value) {
-                                setState(() {
-                                  _rememberMe = value ?? false;
-                                });
-                              },
-                            ),
-                            const Text("Remember Me"),
-                          ],
+                        // Remember Me (Left)
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Checkbox(
+                                value: _rememberMe,
+                                onChanged: (bool? value) {
+                                  setState(() {
+                                    _rememberMe = value ?? false;
+                                  });
+                                },
+                              ),
+                              const Flexible(
+                                child: Text(
+                                  "Remember Me",
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
+                        // Reset Password (Right) - uses intrinsic width
                         TextButton(
                           onPressed: () {
-                            Navigator.pushNamed(context, '/forgetpassword');
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (context) => const Forgetpassword()),
+                            );
                           },
                           child: const Text(
-                            "reset password", // Changed text as per image 1
+                            "reset password",
                             style: TextStyle(
-                              color: Color(0xFF1E88E5), // Blue
+                              color: Color(0xFF1E88E5),
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -291,28 +264,34 @@ class _LoginpageState extends State<Loginpage> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Sign Up Link
+                    // Responsive Sign Up Link
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        const Text("Don't have an account ? ",
-                            style: TextStyle(fontSize: 15)),
+                        const Flexible(
+                          child: Text(
+                            "Don't have an account ? ",
+                            style: TextStyle(fontSize: 15),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                         TextButton(
                           onPressed: () {
                             Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (context) => const Signup()));
+                              context,
+                              MaterialPageRoute(
+                                  builder: (context) => const Signup()),
+                            );
                           },
                           child: const Text(
                             "sign up",
                             style: TextStyle(
-                              color: Color(0xFF1E88E5), // Blue
+                              color: Color(0xFF1E88E5),
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                        )
+                        ),
                       ],
                     ),
                     const SizedBox(height: 40), // Bottom padding

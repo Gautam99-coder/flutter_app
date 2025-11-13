@@ -1,11 +1,10 @@
+import 'package:abc_app/checkuser.dart'; // <-- IMPORT CHECKUSER
 import 'package:abc_app/loginpage.dart';
-import 'package:abc_app/screens/pharmacy/pharmacy_homepage.dart';
 import 'package:abc_app/uihelper.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-
 
 class PharmacySignup extends StatefulWidget {
   const PharmacySignup({super.key});
@@ -20,7 +19,8 @@ class _PharmacySignupState extends State<PharmacySignup> {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController pharmaIdController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
-  final TextEditingController confirmPasswordController = TextEditingController();
+  final TextEditingController confirmPasswordController =
+  TextEditingController();
 
   bool _agreeToTerms = false;
   bool _passwordVisible = false;
@@ -50,8 +50,8 @@ class _PharmacySignupState extends State<PharmacySignup> {
     // --- Start Firebase Logic ---
     try {
       // 1. Create user in Auth
-      UserCredential userCredential = await FirebaseAuth.instance
-          .createUserWithEmailAndPassword(
+      UserCredential userCredential =
+      await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: emailController.text.trim(),
         password: passwordController.text.trim(),
       );
@@ -65,14 +65,21 @@ class _PharmacySignupState extends State<PharmacySignup> {
           'pharmaId': pharmaIdController.text.trim(),
           'role': 'pharmacy', // <-- This is the important part
           'uid': uid,
+          // Add other pharmacy-specific fields here
+          'pharmacyName': nameController.text.trim(), // Default pharmacy name
+          'profileImageUrl': '',
+          'pharmacyAddress': '',
         });
 
-        // 3. Navigate to Pharmacy Home Page
-        // ignore: use_build_context_synchronously
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const PharmacyHomePage()),
-        );
+        // 3. ***** THIS IS THE FIX *****
+        // Navigate to Checkuser() to handle role-based redirection.
+        if (mounted) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => const Checkuser()),
+                (route) => false,
+          );
+        }
       }
     } on FirebaseAuthException catch (ex) {
       Uihelper.CustomAlertBox(context, ex.code.toString());
@@ -106,14 +113,14 @@ class _PharmacySignupState extends State<PharmacySignup> {
           ),
 
           // Back Button
-          Positioned(
-            top: 40.0,
-            left: 10.0,
-            child: IconButton(
-              icon: const Icon(Icons.arrow_back, color: Colors.white, size: 30),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-          ),
+          // Positioned(
+          //  top: 40.0,
+          //  left: 10.0,
+          //  child: IconButton(
+          //   icon: const Icon(Icons.arrow_back, color: Colors.white, size: 30),
+          //   onPressed: () => Navigator.of(context).pop(),
+          //  ),
+          // ),
 
           // Main Content
           Center(
@@ -139,7 +146,7 @@ class _PharmacySignupState extends State<PharmacySignup> {
                     // Name Field
                     TextField(
                       controller: nameController,
-                      decoration: _buildInputDecoration("Name"),
+                      decoration: _buildInputDecoration("Pharmacy Name"),
                     ),
                     const SizedBox(height: 18),
 
@@ -154,7 +161,7 @@ class _PharmacySignupState extends State<PharmacySignup> {
                     // Pharma Id Field
                     TextField(
                       controller: pharmaIdController,
-                      decoration: _buildInputDecoration("Pharma Id"),
+                      decoration: _buildInputDecoration("Pharma License ID"),
                     ),
                     const SizedBox(height: 18),
 
@@ -196,7 +203,8 @@ class _PharmacySignupState extends State<PharmacySignup> {
                           ),
                           onPressed: () {
                             setState(() {
-                              _confirmPasswordVisible = !_confirmPasswordVisible;
+                              _confirmPasswordVisible =
+                              !_confirmPasswordVisible;
                             });
                           },
                         ),
@@ -244,27 +252,35 @@ class _PharmacySignupState extends State<PharmacySignup> {
                     const SizedBox(height: 20),
 
                     // Login Link
+                    // Responsive "Already have an account? sign in"
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        const Text("already have an account ? ",
-                            style: TextStyle(fontSize: 15)),
+                        const Flexible(
+                          child: Text(
+                            "already have an account ? ",
+                            style: TextStyle(fontSize: 15),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
+                        ),
                         TextButton(
                           onPressed: () {
                             Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (context) => const Loginpage()));
+                              context,
+                              MaterialPageRoute(
+                                  builder: (context) => const Loginpage()),
+                            );
                           },
                           child: const Text(
                             "sign in",
                             style: TextStyle(
-                              color: Color(0xFF1E88E5), // Blue
+                              color: Color(0xFF1E88E5),
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                        )
+                        ),
                       ],
                     ),
                     const SizedBox(height: 40), // Bottom padding
