@@ -5,16 +5,9 @@ import 'package:razorpay_flutter/razorpay_flutter.dart';
 
 class RazorpayService {
   late Razorpay _razorpay;
-
-  // --- Keys for your college project ---
-  // Key ID is public and safe.
-  final String keyId = 'rzp_test_kBoKUUZjcxQZ79';
-
-  // WARNING: This is your secret key.
-  // This is NOT safe for a real app, but will make it work
-  // for your project without a backend server.
-  final String keySecret = '4D2rXkBiNC3P2hMjJIgguhDW';
-  // ---
+  // Your Key ID is public and safe to have here.
+  final String keyId = '...'; // Replace with your key ID
+  final String keySecret = '...'; // Replace with your secret
 
   // Callbacks
   Function(PaymentSuccessResponse)? onSuccess;
@@ -46,45 +39,36 @@ class RazorpayService {
     }
   }
 
-  /// --- THIS IS THE FIXED FUNCTION ---
-  /// It creates a Razorpay Order by calling the Razorpay API directly
-  /// from Flutter. This fixes the 404 error.
+  /// Creates a Razorpay Order by calling YOUR backend server.
+  /// This is the secure way to create orders.
   Future<Map<String, dynamic>?> createRazorpayOrder(double amount) async {
-    // This is the direct Razorpay API URL
-    const String razorpayApiUrl = 'https://api.razorpay.com/v1/orders';
+    // This is the URL to YOUR backend (e.g., a Firebase Cloud Function)
+    // You must create this backend function yourself.
+    const String yourBackendUrl = 'https://us-central1-your-project-id.cloudfunctions.net/createRazorpayOrder';
 
     try {
       final int amountInPaise = (amount * 100).toInt();
 
-      // We use Basic Authentication, which is just 'username:password'
-      // encoded in Base64. For Razorpay, it's 'key_id:key_secret'.
-      String basicAuth =
-          'Basic ${base64Encode(utf8.encode('$keyId:$keySecret'))}';
-
-      // This is the HTTP request to Razorpay's server
       final response = await http.post(
-        Uri.parse(razorpayApiUrl),
+        Uri.parse(yourBackendUrl),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': basicAuth, // Here is our key:secret
         },
         body: jsonEncode({
           'amount': amountInPaise,
           'currency': 'INR',
-          'receipt': 'receipt_project_${DateTime.now().millisecondsSinceEpoch}',
+          // You can pass other user/receipt info here
         }),
       );
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        // Success! Razorpay returns the order data.
+      if (response.statusCode == 200) {
+        // Your backend should return the order details from Razorpay
         final orderData = jsonDecode(response.body);
-        print('Razorpay order created directly: ${orderData['id']}');
+        print('Razorpay order created via backend: ${orderData['id']}');
         return orderData;
       } else {
-        // If Razorpay gives an error (e.g., wrong keys)
-        print('Failed to create order. Status: ${response.statusCode}');
-        print('Response body: ${response.body}');
-        throw Exception('Failed to create order: ${response.body}');
+        // If your server fails, log the error
+        throw Exception('Failed to create order via backend: ${response.body}');
       }
     } catch (e) {
       print('Error calling createRazorpayOrder: $e');
@@ -92,8 +76,6 @@ class RazorpayService {
     }
   }
 
-  /// This function opens the checkout UI.
-  /// Your code for this was already correct.
   void openCheckout({
     required double amount,
     required String orderId,
@@ -104,9 +86,9 @@ class RazorpayService {
     final options = {
       'key': keyId, // Your public Key ID
       'amount': (amount * 100).toInt(), // Amount in paise
-      'name': 'Urmedio', // Your app name
+      'name': 'Urmedio',
       'description': 'Order Payment',
-      'order_id': orderId, // The ID from createRazorpayOrder
+      'order_id': orderId, // The ID you got from your backend
       'prefill': {
         'contact': contact,
         'email': email,
