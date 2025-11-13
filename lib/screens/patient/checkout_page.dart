@@ -7,7 +7,6 @@ import 'package:abc_app/screens/patient/order_confirmation_page.dart';
 import 'package:abc_app/screens/patient/saved_addresses_page.dart';
 import 'package:abc_app/services/firestore_service.dart';
 // import 'package:abc_app/services/location_service.dart'; // REMOVED
-import 'package:abc_app/services/razorpay_service.dart';
 // import 'package:abc_app/screens/patient/pharmacy_location_page.dart'; // REMOVED
 import 'package:abc_app/screens/map/map_page.dart'; // ADDED
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -15,6 +14,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
+
+import '../../services/Razorpay_service.dart';
 
 class CheckoutPage extends StatefulWidget {
   final List<CartItemModel> cartItems;
