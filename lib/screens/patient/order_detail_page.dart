@@ -1,3 +1,4 @@
+// screens/patient/order_detail_page.dart
 import 'package:abc_app/models/order_model.dart';
 import 'package:abc_app/services/firestore_service.dart';
 import 'package:flutter/material.dart';
@@ -15,10 +16,13 @@ class OrderDetailPage extends StatefulWidget {
 class _OrderDetailPageState extends State<OrderDetailPage> {
   final FirestoreService _firestoreService = FirestoreService();
   final TextEditingController _cancelReasonController = TextEditingController();
+  // ADDED: Controller for the review text in the feedback dialog
+  final TextEditingController _reviewController = TextEditingController();
 
   @override
   void dispose() {
     _cancelReasonController.dispose();
+    _reviewController.dispose(); // ADDED: Dispose the new controller
     super.dispose();
   }
 
@@ -73,6 +77,8 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
 
   void _showFeedbackDialog() {
     double _rating = 3.0;
+    _reviewController.clear(); // Clear the text field on open
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -97,8 +103,10 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                   );
                 }
             ),
-            const TextField(
-              decoration: InputDecoration(
+            // UPDATED: Connected the TextField to the new controller
+            TextField(
+              controller: _reviewController,
+              decoration: const InputDecoration(
                 labelText: 'Write a review (optional)',
                 border: OutlineInputBorder(),
               ),
@@ -113,11 +121,26 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
           ),
           TextButton(
             child: const Text('Submit'),
-            onPressed: () {
-              // TODO: Implement actual rating logic
-              print("Rating submitted: $_rating stars");
-              // _firestoreService.submitRating(...)
+            onPressed: () async { // CHANGED to async
               Navigator.of(ctx).pop();
+
+              // CALL THE NEW SERVICE METHOD TO UPDATE PHARMACY RATING
+              try {
+                await _firestoreService.submitPharmacyRating(
+                  pharmacyId: widget.order.pharmacyId,
+                  rating: _rating,
+                  review: _reviewController.text.trim(),
+                  orderId: widget.order.id!,
+                );
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Thank you for your feedback! Pharmacy rating updated.')),
+                );
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Failed to submit feedback: $e')),
+                );
+              }
             },
           ),
         ],
@@ -128,6 +151,9 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
   @override
   Widget build(BuildContext context) {
     String formattedDate = DateFormat('dd MMMM yyyy').format(widget.order.createdAt.toDate());
+    // NOTE: For live update of the 'Submit Feedback' button based on order status,
+    // this page should be wrapped in a StreamBuilder listening to the order's document.
+    // For now, we rely on the initial OrderModel passed.
     bool canCancel = widget.order.status == 'Pending';
     bool isDelivered = widget.order.status == 'Delivered';
 

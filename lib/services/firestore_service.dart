@@ -83,7 +83,32 @@ class FirestoreService {
   }
 
   // --- Pharmacy Functions ---
-  // REMOVED DUPLICATE getPharmacies METHOD - KEEP ONLY ONE VERSION
+
+  // ADDED: Stream version of getPharmacyById for live updates in detail page
+  Stream<PharmacyModel?> getPharmacyStreamById(String pharmacyId) {
+    return _db.collection('users').doc(pharmacyId).snapshots().map((doc) {
+      if (doc.exists && doc.data() != null) {
+        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+        return PharmacyModel(
+          id: doc.id,
+          name: data['pharmacyName'] ?? data['name'] ?? 'Unknown Pharmacy',
+          description: data['bio'] ?? '',
+          address: data['pharmacyAddress'] ?? data['location'] ?? '',
+          contactNumber: data['pharmacyContact'] ?? data['phoneNumber'] ?? '',
+          email: data['email'] ?? '',
+          latitude: (data['latitude'] ?? 0.0).toDouble(),
+          longitude: (data['longitude'] ?? 0.0).toDouble(),
+          profileImageUrl: data['profileImageUrl'] ?? '',
+          rating: (data['rating'] ?? 0.0).toDouble(),
+          reviewCount: (data['reviewCount'] ?? 0).toInt(),
+          isOpen: data['isOpen'] ?? true,
+          openingHours: data['openingHours'] ?? '9:00 AM - 9:00 PM',
+          services: List<String>.from(data['services'] ?? []),
+        );
+      }
+      return null;
+    });
+  }
 
   Future<PharmacyModel?> getPharmacyById(String pharmacyId) async {
     try {
@@ -700,5 +725,58 @@ class FirestoreService {
       'review': review,
       'createdAt': Timestamp.now(),
     });
+  }
+
+  // ADDED: Logic to update pharmacy rating
+  Future<void> submitPharmacyRating({
+    required String pharmacyId,
+    required double rating,
+    required String review,
+    required String orderId,
+  }) async {
+    try {
+      if (currentUserId == null) throw Exception('User not logged in');
+
+      // 1. Get the current pharmacy data (UserModel)
+      DocumentReference pharmacyRef = _db.collection('users').doc(pharmacyId);
+      DocumentSnapshot doc = await pharmacyRef.get();
+
+      if (!doc.exists) {
+        throw Exception('Pharmacy not found.');
+      }
+
+      Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+      // These fields are stored in the UserModel doc for the pharmacy
+      double currentRating = (data['rating'] ?? 0.0).toDouble();
+      int reviewCount = (data['reviewCount'] ?? 0).toInt();
+
+      // 2. Calculate the new aggregated rating
+      final double newRating = ((currentRating * reviewCount) + rating) / (reviewCount + 1);
+      final int newReviewCount = reviewCount + 1;
+
+      // 3. Update the pharmacy's profile with the new rating/count
+      await pharmacyRef.update({
+        'rating': newRating,
+        'reviewCount': newReviewCount,
+      });
+
+      // 4. Record the specific review
+      await pharmacyRef.collection('reviews').add({
+        'userId': currentUserId,
+        'rating': rating,
+        'review': review,
+        'orderId': orderId,
+        'createdAt': Timestamp.now(),
+      });
+
+      // 5. Update the order to mark feedback as given (optional, but good practice)
+      await _db.collection('orders').doc(orderId).update({
+        'isFeedbackSubmitted': true,
+      });
+
+    } catch (e) {
+      print('Error submitting pharmacy rating: $e');
+      rethrow;
+    }
   }
 }
